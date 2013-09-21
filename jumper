@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+"""Jump around your local directory tree. Destinations are matched by multiple
+regexp patterns, and prioritized (ranked) by frequency of access, decayed over
+time.
+"""
+
+import dbm
+import argparse
+from functools import partial
+from os.path import expanduser, join, sep, isdir
+from operator import itemgetter
+from re import compile, IGNORECASE
+from sys import argv, stdin, stderr
+from time import time
+
+
+parser = argparse.ArgumentParser(description=__doc__)
+arg = parser.add_argument
+arg('ptrns', nargs='*')
+arg('--time', '-t', action='store_true', help='rank by recency, disregarding count')
+arg('--count', '-c', action='store_true', help='rank by count, disregarding recency')
+arg('--list', '-l', action='store_true', help='rank by recency and count, without decay')
+arg('--interactive', '-i', action='store_true', help='interactive selection of match')
+arg('--show', '-s', action='store_true', help='only show matches')
+args = parser.parse_args()
+db = dbm.open(join(expanduser('~'), '.jumper'), 'c')  # format: {<path>: '<rank>|<last access>'}
+
+l = []
+t1 = time()
+for k in db.keys():
+    k = k.decode('ASCII')
+    c, t = map(int, db[k].decode('ASCII').split('|'))
+    l.append(((t if args.time else c if args.count else
+               (c, t) if args.list else c * ((604800 - t1 + t) / 604800.0)), k))  # decay over a week
+if not l: raise SystemExit()
+
+def shorten_home(path, ptrn=compile('^%s%s' % (expanduser('~'), sep))):
+    return ptrn.sub('~' + sep, path)
+
+if not args.ptrns and args.interactive:
+    args.ptrns = '.'
+
+if not args.ptrns:
+    l.sort()
+
+    # formatting
+    f = []
+    for rank, path in l:
+        path = shorten_home(path)
+        if args.list:
+            f.append(tuple(map(str, rank) + [path]))
+        else:
+            if args.time or args.count:
+                rank = str(rank)
+            else:
+                rank = '%0.2f' % rank
+            f.append((rank, path))
+
+    lengths = [max(len(s) for s in a) for a in zip(*f)]
+    for t in f:
+        s = [v.ljust(lengths[i]) if i else v.rjust(lengths[i])
+             for i, v in enumerate(t)]
+        print(' '.join(s))
+
+else:
+    matches = []
+    l.sort(reverse=True)
+    subs = args.ptrns
+    ptrns = map(partial(compile, flags=(IGNORECASE if all(map(str.islower, subs)) else 0)), subs)
+    collect = args.interactive or args.show
+    for r, path in l:
+        if all(s.search(path) for s in ptrns):
+            if isdir(path):
+                if collect:
+                    matches.append(path)
+                else:
+                    print(path)
+                    raise SystemExit(1)
+            else:
+                del db[path]  # remove any non-valid (normally, obsolete) directories
+
+if args.interactive:
+    if len(matches) == 1:
+        print(matches[0])
+        raise SystemExit(1)
+    match_count = len(matches)
+    if matches:
+        for i, path in enumerate(reversed(matches)):
+            stderr.write('%0*s %s\n' % (len(str(match_count + 1)), match_count - i, shorten_home(path)))
+    choice = raw_input()
+    if choice:
+        print(matches[int(choice) - 1])
+        raise SystemExit(1)
+
+elif args.show:
+    print('\n'.join(matches))

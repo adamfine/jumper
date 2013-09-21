@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+
+import argparse, anydbm
+from os.path import expanduser, join
+
+db = anydbm.open(join(expanduser('~'), '.jumper'), 'c')
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    arg = parser.add_argument
+    arg('--delete', '-d', action='store_true', help='interactively delete an entry')
+    args = parser.parse_args()
+    return vars(args)
+
+args = get_args()
+keys = [(map(int, db[k].split('|')), k) for k in db.keys()]
+keys.sort()
+
+for i, ((count, time), k) in enumerate(keys):
+    print i, time, count, k
+
+if 'delete' in args:
+    i = int(raw_input('Delete entry number: '))
+    del db[keys[i][1]]

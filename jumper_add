@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+
+import dbm, os, time
+
+HOME = os.environ['HOME']
+path = os.getcwd()
+
+if path == HOME: raise SystemExit()
+
+db = dbm.open(os.path.join(HOME, '.jumper'), 'c')
+
+rank = int(db.get(path, b'0|').split(b'|')[0])
+rank += 1
+db[path] = '|'.join((str(rank), str(int(time.time()))))
+
+db.close()
