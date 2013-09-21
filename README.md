@@ -14,4 +14,4 @@ For your convenience, both steps are encapsulated in `jumper_install.bash`, whic
 
 Following installation, you can invoke the jumper by its function alias `j`.
 
-Tested on Linux and OS X. Compatible with both Python 2.x and 3.x.
+Tested on Linux and OS X. Compatible with both Python 2.6+ and 3.x.
